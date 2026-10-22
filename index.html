@@ -25,10 +25,8 @@ dialog{border:1px solid var(--line);border-radius:22px;padding:0;width:min(540px
    <label class="field">Email address<input id="orbitEmail" type="email" placeholder="you@example.com" autocomplete="email" required></label>
    <label class="field">Password<input id="orbitPassword" type="password" placeholder="At least 6 characters" autocomplete="current-password" minlength="6" required></label>
    <button class="btn full" id="passwordSubmit" type="submit">Sign in to Orbit</button>
-   <button class="btn secondary full" id="signupBtn" type="button" style="margin-top:8px">Create account</button>
-   <button class="btn ghost full" id="demoLoginBtn" type="button" style="margin-top:4px">Continue in local demo mode</button>
   </form>
-  <div class="status" id="authStatus">Sign in with your Orbit account to sync your study data across devices. If email confirmation is enabled, verify your email after creating an account.</div>
+  <div class="status" id="authStatus">Sign in with your personal Orbit account. New account creation is disabled for this private workspace.</div>
  </div>
 </section>
 <div id="app">
@@ -150,7 +148,6 @@ document.addEventListener('change',e=>{if(e.target.matches('[data-atc-check]')){
 $('#taskForm').addEventListener('submit',e=>{e.preventDefault();const id=$('#taskId').value,obj={id:id||uid(),title:$('#taskTitle').value.trim(),subject:$('#taskSubject').value,phase:$('#taskPhase').value,date:$('#taskDate').value,time:$('#taskTime').value,duration:+$('#taskDuration').value,priority:$('#taskPriority').value,notes:$('#taskNotes').value,done:state.tasks.find(t=>t.id===id)?.done||false,createdAt:new Date().toISOString()};if(id)state.tasks=state.tasks.map(t=>t.id===id?obj:t);else state.tasks.push(obj);persist();$('#taskDialog').close();renderAll();toast('Task saved')});
 $('#assignmentForm').addEventListener('submit',e=>{e.preventDefault();const id=$('#assignmentId').value,obj={id:id||uid(),title:$('#assignmentTitle').value.trim(),subject:$('#assignmentSubject').value,category:$('#assignmentCategory').value,status:$('#assignmentStatus').value,due:$('#assignmentDue').value,notes:$('#assignmentNotes').value};if(id)state.assignments=state.assignments.map(a=>a.id===id?obj:a);else state.assignments.push(obj);persist();$('#assignmentDialog').close();renderAll();toast('Assignment saved')});
 $('#quickAdd').onclick=()=>openTask();$('#addAssignment').onclick=()=>openAssignment();$('#taskSearch').addEventListener('input',renderTasks);$('#assignmentCategoryFilter').addEventListener('change',renderAssignments);$('#prevWeek').onclick=()=>{state.selectedDay=plusDays(state.selectedDay,-7);renderCalendar()};$('#nextWeek').onclick=()=>{state.selectedDay=plusDays(state.selectedDay,7);renderCalendar()};$('#todayWeek').onclick=()=>{state.selectedDay=todayISO();renderCalendar()};$('#phaseFilter').addEventListener('change',renderTasks);$('#subjectFilter').addEventListener('change',renderTasks);$('#themeBtn').onclick=$('#themeBtn2').onclick=()=>setTheme(state.theme==='dark'?'light':'dark');$('#exportBtn').onclick=exportBackup;$('#restoreInput').addEventListener('change',e=>{restoreBackup(e.target.files[0]);e.target.value=''});$('#resetBtn').onclick=()=>{if(confirm('Reset Orbit to the original sample timetable? This will replace your current local demo data.')){state.tasks=JSON.parse(JSON.stringify(seedTasks));state.assignments=JSON.parse(JSON.stringify(seedAssignments));state.atcChapters=JSON.parse(JSON.stringify(seedAtcChapters));persist();renderAll();toast('Sample timetable restored')}};$('#signOutBtn').onclick=async()=>{if(supa&&state.user)await supa.auth.signOut();state.user=null;cloudReady=false;$('#app').style.display='none';$('#gate').style.display='grid';$('#orbitPassword').value='';};
-$('#demoBtn')?.remove();
 function currentData(){return {tasks:state.tasks,assignments:state.assignments,atcChapters:state.atcChapters,theme:state.theme}}
 // Cloud payload deliberately excludes Google Calendar imports. They stay in this browser's local storage.
 function cloudData(){const d=currentData();d.tasks=d.tasks.filter(t=>!t.calendarEvent&&!String(t.sourceKey||'').startsWith('calendar:')&&!String(t.sourceKey||'').startsWith('calendar-export:'));return d}
@@ -194,20 +191,6 @@ if($('#passwordForm')) $('#passwordForm').addEventListener('submit',async e=>{
   catch(err){setAuthStatus(err.message||'Could not sign in.',true)}
   finally{$('#passwordSubmit').disabled=false}
 });
-if($('#signupBtn')) $('#signupBtn').addEventListener('click',async()=>{
-  const email=$('#orbitEmail').value.trim(), password=$('#orbitPassword').value;
-  if(!email||!password){setAuthStatus('Enter your email and a password of at least 6 characters first.',true);return}
-  if(!supa){setAuthStatus('Supabase did not initialize. Check your internet connection and reload the page.',true);return}
-  $('#signupBtn').disabled=true;setAuthStatus('Creating your account…');
-  try{
-    const {data,error}=await supa.auth.signUp({email,password,options:{emailRedirectTo:location.origin+location.pathname}});
-    if(error)throw error;
-    if(data.session&&data.user){await loadSignedInWorkspace(data.user)}
-    else setAuthStatus('Account created. Check your email to confirm the account, then return here and sign in.');
-  }catch(err){setAuthStatus(err.message||'Could not create account.',true)}
-  finally{$('#signupBtn').disabled=false}
-});
-if($('#demoLoginBtn')) $('#demoLoginBtn').addEventListener('click',()=>{loadLocal();cloudReady=false;showApp(null,'demo')});
 if($('#syncBtn')) $('#syncBtn').addEventListener('click',syncCloudNow);
 (async function initializeOrbit(){
   loadLocal();

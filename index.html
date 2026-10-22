@@ -22,10 +22,13 @@ dialog{border:1px solid var(--line);border-radius:22px;padding:0;width:min(540px
   <div class="brand"><span class="logo"><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="16" cy="16" r="4.2"/><ellipse cx="16" cy="16" rx="13" ry="6.2" transform="rotate(-35 16 16)"/><ellipse cx="16" cy="16" rx="13" ry="6.2" transform="rotate(35 16 16)"/><circle cx="26.5" cy="8" r="1.8" fill="currentColor" stroke="none"/></svg></span>orbit<span style="color:var(--accent)">.</span></div>
   <div class="gate-title" id="gateTitle">Your goals.<br>In orbit.</div><p class="gate-desc" id="gateDesc">A calm, focused command center for your study plan, assignments and exam preparation.</p>
   <form id="passwordForm">
-   <label class="field">Your Orbit password<input id="orbitPassword" type="password" placeholder="Enter your dedicated password" autocomplete="current-password" required></label>
-   <button class="btn full" id="passwordSubmit" type="submit">Unlock Orbit</button>
+   <label class="field">Email address<input id="orbitEmail" type="email" placeholder="you@example.com" autocomplete="email" required></label>
+   <label class="field">Password<input id="orbitPassword" type="password" placeholder="At least 6 characters" autocomplete="current-password" minlength="6" required></label>
+   <button class="btn full" id="passwordSubmit" type="submit">Sign in to Orbit</button>
+   <button class="btn secondary full" id="signupBtn" type="button" style="margin-top:8px">Create account</button>
+   <button class="btn ghost full" id="demoLoginBtn" type="button" style="margin-top:4px">Continue in local demo mode</button>
   </form>
-  <div class="status" id="authStatus">Private study workspace · Enter your dedicated password to continue.</div>
+  <div class="status" id="authStatus">Sign in with your Orbit account to sync your study data across devices. If email confirmation is enabled, verify your email after creating an account.</div>
  </div>
 </section>
 <div id="app">
@@ -70,10 +73,9 @@ dialog{border:1px solid var(--line);border-radius:22px;padding:0;width:min(540px
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script>
 // Orbit uses a separate Supabase table from Pennywise. Add your project URL and publishable/anon key here.
-const ORBIT_SUPABASE_URL = "";
-// Change this password before publishing. This client-side gate is convenience-only, not strong security.
-const ORBIT_DEDICATED_PASSWORD = 'yohandatabase';
-const ORBIT_SUPABASE_KEY = "";
+const ORBIT_SUPABASE_URL = "https://ufiidlmtehkqnbltdsys.supabase.co";
+// Supabase publishable key is designed for browser use. Protect data with Row Level Security.
+const ORBIT_SUPABASE_KEY = "sb_publishable_cZCRyPquPdmY_VFLyoCR7A_cYsFSmqS";
 // Configure these in Settings; never add a Google client secret to GitHub Pages.
 const GOOGLE_SCOPES = "https://www.googleapis.com/auth/spreadsheets.readonly https://www.googleapis.com/auth/drive.metadata.readonly https://www.googleapis.com/auth/tasks.readonly https://www.googleapis.com/auth/calendar.events.readonly";
 let googleTokenClient=null, googleAccessToken=null, googleRefreshTimer=null;
@@ -100,7 +102,9 @@ const seedAssignments=[{"id":"assignment-math","title":"Mathematics Assignment",
 let state={tasks:seedTasks,assignments:seedAssignments,atcChapters:seedAtcChapters,theme:'light',user:null,phaseFilter:'all',taskFilter:'all',assignmentFilter:'all',selectedDay:todayISO(),mode:'demo'};
 let supa=null,cloudReady=false,cloudTimer=null;
 try{if(ORBIT_SUPABASE_URL&&ORBIT_SUPABASE_KEY&&window.supabase)supa=window.supabase.createClient(ORBIT_SUPABASE_URL,ORBIT_SUPABASE_KEY)}catch(e){}
-function persist(){try{localStorage.setItem('orbit.study.v2',JSON.stringify({tasks:state.tasks,assignments:state.assignments,atcChapters:state.atcChapters,theme:state.theme}));}catch(e){} if(supa&&state.user&&cloudReady){clearTimeout(cloudTimer);cloudTimer=setTimeout(async()=>{const {error}=await supa.from('orbit_study_data').upsert({user_id:state.user.id,data:{tasks:state.tasks,assignments:state.assignments,atcChapters:state.atcChapters,theme:state.theme},updated_at:new Date().toISOString()},{onConflict:'user_id'});if(error)toast('Cloud sync issue: '+error.message);else setCloudStatus('Synced to your account');},650)}}
+function currentData(){return {tasks:state.tasks,assignments:state.assignments,atcChapters:state.atcChapters,theme:state.theme}}
+function persist(){try{localStorage.setItem('orbit.study.v2',JSON.stringify(currentData()));}catch(e){} if(supa&&state.user&&cloudReady){clearTimeout(cloudTimer);cloudTimer=setTimeout(async()=>{try{const {error}=await supa.from('orbit_study_data').upsert({user_id:state.user.id,data:currentData(),updated_at:new Date().toISOString()},{onConflict:'user_id'});if(error){setCloudStatus('Cloud sync failed');toast('Cloud sync issue: '+error.message)}else setCloudStatus('Synced to your account')}catch(e){setCloudStatus('Cloud sync failed');toast('Cloud sync issue: '+(e.message||'Network error'))}},650)}}
+async function syncCloudNow(){if(!supa||!state.user){toast('Sign in to a Supabase account first.');return}cloudReady=false;setCloudStatus('Syncing…');try{const {error}=await supa.from('orbit_study_data').upsert({user_id:state.user.id,data:currentData(),updated_at:new Date().toISOString()},{onConflict:'user_id'});if(error)throw error;cloudReady=true;setCloudStatus('Synced to your account');toast('Orbit data synced')}catch(e){setCloudStatus('Cloud sync failed');toast('Sync failed: '+(e.message||'Check your connection'))}}
 function mergeWithSeed(saved,seed){const key=x=>x.phase!==undefined?[String(x.title).trim().toLowerCase(),x.phase,x.date].join('|'):[String(x.title).trim().toLowerCase(),x.due,x.category||''].join('|');const map=new Map();for(const x of seed)map.set(key(x),x);for(const x of (saved||[])){const k=key(x),old=map.get(k);map.set(k,{...(old||{}),...x,id:old?.id||x.id})}return [...map.values()]}
 function loadLocal(){try{const x=JSON.parse(localStorage.getItem('orbit.study.v2')||'null');if(x&&Array.isArray(x.tasks)&&Array.isArray(x.assignments)){state.tasks=mergeWithSeed(x.tasks,seedTasks);state.assignments=mergeWithSeed(x.assignments,seedAssignments);state.atcChapters=Array.isArray(x.atcChapters)?x.atcChapters:JSON.parse(JSON.stringify(seedAtcChapters));state.theme=x.theme||'light';persist()}}catch(e){}}
 function setCloudStatus(s){$('#sideSync').innerHTML='<span class="sync-dot"></span>'+esc(s);$('#cloudStatus').textContent=s}
@@ -144,9 +148,7 @@ $('#taskForm').addEventListener('submit',e=>{e.preventDefault();const id=$('#tas
 $('#assignmentForm').addEventListener('submit',e=>{e.preventDefault();const id=$('#assignmentId').value,obj={id:id||uid(),title:$('#assignmentTitle').value.trim(),subject:$('#assignmentSubject').value,category:$('#assignmentCategory').value,status:$('#assignmentStatus').value,due:$('#assignmentDue').value,notes:$('#assignmentNotes').value};if(id)state.assignments=state.assignments.map(a=>a.id===id?obj:a);else state.assignments.push(obj);persist();$('#assignmentDialog').close();renderAll();toast('Assignment saved')});
 $('#quickAdd').onclick=()=>openTask();$('#addAssignment').onclick=()=>openAssignment();$('#taskSearch').addEventListener('input',renderTasks);$('#assignmentCategoryFilter').addEventListener('change',renderAssignments);$('#prevWeek').onclick=()=>{state.selectedDay=plusDays(state.selectedDay,-7);renderCalendar()};$('#nextWeek').onclick=()=>{state.selectedDay=plusDays(state.selectedDay,7);renderCalendar()};$('#todayWeek').onclick=()=>{state.selectedDay=todayISO();renderCalendar()};$('#phaseFilter').addEventListener('change',renderTasks);$('#subjectFilter').addEventListener('change',renderTasks);$('#themeBtn').onclick=$('#themeBtn2').onclick=()=>setTheme(state.theme==='dark'?'light':'dark');$('#exportBtn').onclick=exportBackup;$('#restoreInput').addEventListener('change',e=>{restoreBackup(e.target.files[0]);e.target.value=''});$('#resetBtn').onclick=()=>{if(confirm('Reset Orbit to the original sample timetable? This will replace your current local demo data.')){state.tasks=JSON.parse(JSON.stringify(seedTasks));state.assignments=JSON.parse(JSON.stringify(seedAssignments));state.atcChapters=JSON.parse(JSON.stringify(seedAtcChapters));persist();renderAll();toast('Sample timetable restored')}};$('#signOutBtn').onclick=async()=>{if(supa&&state.user)await supa.auth.signOut();state.user=null;cloudReady=false;$('#app').style.display='none';$('#gate').style.display='grid';$('#password').value='';};
 $('#demoBtn')?.remove();
-$('#passwordForm').addEventListener('submit',e=>{e.preventDefault();const entered=$('#orbitPassword').value;if(entered!==ORBIT_DEDICATED_PASSWORD){$('#authStatus').textContent='That password did not match. Try again.';$('#orbitPassword').value='';return}sessionStorage.setItem('orbit.unlocked','yes');loadLocal();showApp(null,'demo');$('#authStatus').textContent='';});
-$('#signOutBtn').onclick=()=>{sessionStorage.removeItem('orbit.unlocked');state.user=null;cloudReady=false;$('#app').style.display='none';$('#gate').style.display='grid';$('#orbitPassword').value='';};
-$('#refreshRoadmap')?.addEventListener('click',()=>{renderPhases();toast('Roadmap refreshed')});
-async function restoreSession(){loadLocal();if(sessionStorage.getItem('orbit.unlocked')==='yes'){showApp(null,'demo');return}$('#gate').style.display='grid';$('#app').style.display='none'}
-restoreSession();
+function currentData(){return {tasks:state.tasks,assignments:state.assignments,atcChapters:state.atcChapters,theme:state.theme}}
+function persist(){try{localStorage.setItem('orbit.study.v2',JSON.stringify(currentData()));}catch(e){} if(supa&&state.user&&cloudReady){clearTimeout(cloudTimer);cloudTimer=setTimeout(async()=>{try{const {error}=await supa.from('orbit_study_data').upsert({user_id:state.user.id,data:currentData(),updated_at:new Date().toISOString()},{onConflict:'user_id'});if(error){setCloudStatus('Cloud sync failed');toast('Cloud sync issue: '+error.message)}else setCloudStatus('Synced to your account')}catch(e){setCloudStatus('Cloud sync failed');toast('Cloud sync issue: '+(e.message||'Network error'))}},650)}}
+async function syncCloudNow(){if(!supa||!state.user){toast('Sign in to a Supabase account first.');return}cloudReady=false;setCloudStatus('Syncing…');try{const {error}=await supa.from('orbit_study_data').upsert({user_id:state.user.id,data:currentData(),updated_at:new Date().toISOString()},{onConflict:'user_id'});if(error)throw error;cloudReady=true;setCloudStatus('Synced to your account');toast('Orbit data synced')}catch(e){setCloudStatus('Cloud sync failed');toast('Sync failed: '+(e.message||'Check your connection'))}}
 </script></body></html>

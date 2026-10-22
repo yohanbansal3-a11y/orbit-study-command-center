@@ -107,6 +107,7 @@ function currentData(){return {tasks:state.tasks,assignments:state.assignments,a
 function mergeWithSeed(saved,seed){const key=x=>x.phase!==undefined?[String(x.title).trim().toLowerCase(),x.phase,x.date].join('|'):[String(x.title).trim().toLowerCase(),x.due,x.category||''].join('|');const map=new Map();for(const x of seed)map.set(key(x),x);for(const x of (saved||[])){const k=key(x),old=map.get(k);map.set(k,{...(old||{}),...x,id:old?.id||x.id})}return [...map.values()]}
 function loadLocal(){try{const x=JSON.parse(localStorage.getItem('orbit.study.v2')||'null');if(x&&Array.isArray(x.tasks)&&Array.isArray(x.assignments)){state.tasks=mergeWithSeed(x.tasks,seedTasks);state.assignments=mergeWithSeed(x.assignments,seedAssignments);state.atcChapters=Array.isArray(x.atcChapters)?x.atcChapters:JSON.parse(JSON.stringify(seedAtcChapters));state.theme=x.theme||'light';persist()}}catch(e){}}
 function setCloudStatus(s){$('#sideSync').innerHTML='<span class="sync-dot"></span>'+esc(s);$('#cloudStatus').textContent=s}
+function setAuthStatus(message,isError=false){const el=$('#authStatus');if(!el)return;el.textContent=String(message??'');el.setAttribute('role',isError?'alert':'status');el.setAttribute('aria-live','polite');el.style.color=isError?'var(--red)':'var(--muted)'}
 function toast(s){const t=$('#toast');t.textContent=s;t.classList.remove('hidden');setTimeout(()=>t.classList.add('hidden'),2600)}
 function phaseForDate(date){return phases.find(p=>date>=p.start&&date<=p.end)||phases[2]}
 function currentPhase(){const d=todayISO();return phaseForDate(d)}
